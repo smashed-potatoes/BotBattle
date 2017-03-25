@@ -1,0 +1,13 @@
+{
+    "name": "jonmelnik/botbattle",
+    "description": "Bot Battle",
+    "require": {
+        "slim/slim": "^3.0",
+        "guzzlehttp/guzzle": "^6.2"
+    },
+    "autoload": {
+        "psr-4" : {
+            "BotBattle\\": "lib/"
+        }
+    }
+}
