@@ -62,6 +62,22 @@ class Game extends Model implements \JsonSerializable {
     }
 
     /**
+    * Get a game's player by ID
+    * @param int $id The id of the player
+    *
+    * @return Player|null The player or null if the one isn't found for the given id
+    */
+    public function getPlayerById(int $id) { // : ?Player {
+        foreach ($this->players as $player) {
+            if ($player->getId() == $id) {
+                return $player;
+            }
+        }
+
+        return null;
+    }
+
+    /**
     * Serializes the object to a value that can be serialized
     * @return array Indexed array of exposed values to be serialized
     */

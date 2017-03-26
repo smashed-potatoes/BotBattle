@@ -99,8 +99,10 @@ CREATE TABLE `players` (
   `id` int(11) NOT NULL,
   `games_id` int(11) NOT NULL,
   `users_id` int(11),
-  `x` int(11),
-  `y` int(11)
+  `x` int(11) NOT NULL,
+  `y` int(11) NOT NULL,
+  `health` int(11) NOT NULL,
+  `points` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 --
@@ -136,7 +138,8 @@ CREATE TABLE `tiles` (
   `boards_id` int(11) NOT NULL,
   `players_id` int(11),
   `x` int(11),
-  `y` int(11)
+  `y` int(11),
+  `type` int(11)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 --

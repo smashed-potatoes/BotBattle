@@ -162,14 +162,6 @@ class GameService {
                 error_log("Cannot start game, error positioning player");
                 return null;
             }
-
-            $tile = $game->board->getTileAt($player->x, $player->y);
-            $tile->player = $player;
-
-            if (!$this->saveTile($tile)) {
-                error_log("Cannot start game, error updating player tile");
-                return null;
-            }
         }
 
         // Update the game's state
@@ -308,7 +300,7 @@ class GameService {
         if ($row = $result->statement->fetch(\PDO::FETCH_ASSOC)) {
             $user = $this->userService->getUser($row['users_id']);
 
-            return new Player($row['id'], $user, $row['x'], $row['y']);
+            return new Player($row['id'], $user, $row['x'], $row['y'], $row['health'], $row['points']);
         }
 
         return null;
@@ -341,35 +333,6 @@ class GameService {
         if ($row = $result->statement->fetch(\PDO::FETCH_ASSOC)) {
             // User has laready moved, return their previous move
             return new Move($row['id'], $player, $game->turn, $row['action']);
-        }
-
-        // User hasn't moved, check if the requested move is valid
-        switch ($action) {
-            case Move::ACTION_LEFT:
-                // Cannot move further left, default to none
-                if ($player->x === 0) {
-                    $action = Move::ACTION_NONE;
-                }
-                break;
-            case Move::ACTION_RIGHT:
-                if ($player->x === $game->board->width-1) {
-                    $action = Move::ACTION_NONE;
-                }
-                break;
-            case Move::ACTION_UP:
-                if ($player->y === 0) {
-                    $action = Move::ACTION_NONE;
-                }
-                break;
-            case Move::ACTION_DOWN:
-                if ($player->y === $game->board->height-1) {
-                    $action = Move::ACTION_NONE;
-                }
-                break;
-            case Move::ACTION_NONE:
-            default:
-                // No update
-                break;
         }
 
         // Insert the move
@@ -440,24 +403,40 @@ class GameService {
 
         // Move the players
         foreach ($moves as $move) {
+            $x = $move->player->x;
+            $y = $move->player->y;
             switch ($move->action) {
                 case Move::ACTION_LEFT:
-                    $move->player->x--;
+                    $x--;
                     break;
                 case Move::ACTION_RIGHT:
-                    $move->player->x++;
+                    $x++;
                     break;
                 case Move::ACTION_UP:
-                    $move->player->y--;
+                    $y--;
                     break;
                 case Move::ACTION_DOWN:
-                    $move->player->y++;
+                    $y++;
                     break;
                 case Move::ACTION_NONE:
                 default:
                     // No update
                     break;
             }
+
+            // Constrain to the board
+            if ($x < 0) $x = 0;
+            if ($x > $game->board->width-1) $x = $game->board->width-1;
+            if ($y < 0) $y = 0;
+            if ($y > $game->board->height-1) $y = $game->board->height-1;
+
+            // Check if the user can move into the tile
+            $targetTile = $game->board->getTileAt($x, $y);
+            if ($targetTile->type !== Tile::TYPE_WALL) {
+                $move->player->x = $x;
+                $move->player->y = $y;
+            }
+
             if (!$this->savePlayer($move->player)) {
                 throw new \Exception('Error saving player');
             }
@@ -476,16 +455,57 @@ class GameService {
                 // Sharing a space with another player
                 if ($player->x === $otherPlayer->x && $player->y === $otherPlayer->y) {
                     $alone = false;
-                    // TODO: Any consequence?
+                    $otherPlayer->health = $otherPlayer->health - 20;
                 }
             }
 
-            // When alone on a tile, take control of it
-            if ($alone) {
-                $tile = $game->board->getTileAt($player->x, $player->y);
-                $tile->player = $player;
+            // When alone on a gold tile, take control of it
+            $tile = $game->board->getTileAt($player->x, $player->y);
+            if ( $alone && $tile->type === Tile::TYPE_GOLD 
+                && ($tile->player == null || $tile->player->getId() !== $player->getId()) ){
+                $player->health -= 20;
 
-                $this->saveTile($tile);
+                if ($player->health > 0) {
+                    $tile->player = $player;
+                    $this->saveTile($tile);
+                }
+            }
+            // Heal on health tiles
+            elseif ( $tile->type === Tile::TYPE_HEAL) {
+                $player->health += 20;
+                $player->health = $player->health > 100 ? 100 : $player->health;
+            }
+        }
+
+        // Update the player points
+        foreach ($game->board->goldTiles as $goldTile) {
+            if ($goldTile->player !== null) {
+                $player = $game->getPlayerById($goldTile->player->getId());
+                $player->points++;
+            }
+        }
+
+        // Save the players
+        foreach ($game->players as $player) {
+            // Check if the player died
+            if ($player->health <= 0) {
+                // Remove user's gold tiles
+                foreach ($game->board->goldTiles as $goldTile) {
+                    if ($goldTile->player !== null && $goldTile->player->getId() === $player->getId()) {
+                        $goldTile->player = null;
+                        $this->saveTile($goldTile);
+                    }
+                }
+
+                // Respawn at health tile
+                $healthTile = $game->board->healTiles[array_rand($game->board->healTiles)];
+                $player->health = 100;
+                $player->x = $healthTile->x;
+                $player->y = $healthTile->y;
+            }
+
+            if (!$this->savePlayer($player)) {
+                throw new \Exception('Error saving player');
             }
         }
 
@@ -521,10 +541,30 @@ class GameService {
         $id = $this->db->insertId();
 
         // Create tiles
+        // TODO: Load map
         $tiles = [];
         for ($x=0; $x<$width; $x++) {
             for ($y=0; $y<$height; $y++) {
-                $tiles[] = $this->createTile($id, $x, $y);
+                $type = Tile::TYPE_GROUND;
+
+                // Put healing in the center
+                if ( ($x == floor($width / 2) + 1 && $y == floor($height / 2))
+                    || ($x == floor($width / 2) - 1 && $y == floor($height / 2)) ) {
+                    $type = Tile::TYPE_HEAL;
+                }
+                // Put gold in corners
+                elseif (($x === 0 && $y === 0)
+                    || ($x === 0 && $y === $height - 1)
+                    || ($y === 0 && $x === $width - 1)
+                    || ($x === $width - 1 && $y === $height - 1)) {
+                    $type = Tile::TYPE_GOLD;
+                }
+                // Put wall across the center
+                elseif (($x == floor($width / 2) && $y > 0 && $y < $height - 1)
+                    || ($y == floor($height / 2) && $x > 0 && $x < $width - 1)) {
+                    $type = Tile::TYPE_WALL;
+                }
+                $tiles[] = $this->createTile($id, $x, $y, $type);
             }
         }
 
@@ -560,13 +600,14 @@ class GameService {
     *
     * @return Tile The tile that was created
     */
-    private function createTile(int $boardId, int $x, int $y) : Tile {
+    private function createTile(int $boardId, int $x, int $y, int $type) : Tile {
         // Create new tile
-        $qry = "INSERT INTO tiles (boards_id, x, y) VALUES (:boardId, :x, :y)";
+        $qry = "INSERT INTO tiles (boards_id, x, y, type) VALUES (:boardId, :x, :y, :type)";
         $params = [
             'boardId' => $boardId,
             'x' => $x,
-            'y' => $y
+            'y' => $y,
+            'type' => $type
         ];
         $result = $this->db->query($qry, $params);
 
@@ -576,7 +617,7 @@ class GameService {
 
         $id = $this->db->insertId();
 
-        return new Tile($id, $x, $y);
+        return new Tile($id, $x, $y, null, $type);
     }
 
     /**
@@ -646,7 +687,7 @@ class GameService {
                 if ($row['players_id'] !== null) {
                     $player = $this->getPlayer($row['players_id']);
                 }
-                $tiles[] = new Tile($row['id'], $row['x'], $row['y'], $player);
+                $tiles[] = new Tile($row['id'], $row['x'], $row['y'], $player, $row['type']);
             }
             return $tiles;
         }
@@ -665,12 +706,14 @@ class GameService {
     */
     private function createPlayer(Game $game, User $user, int $x, int $y) : Player {
         // Create new Player
-        $qry = "INSERT INTO players (games_id, users_id, x, y) VALUES (:gameId, :userId, :x, :y)";
+        $qry = "INSERT INTO players (games_id, users_id, x, y, health, points) VALUES (:gameId, :userId, :x, :y, :health, :points)";
         $params = [
             'gameId' => $game->getId(),
             'userId' => $user->getId(),
             'x' => $x,
-            'y' => $y
+            'y' => $y,
+            'health' => 100,
+            'points' => 0,
         ];
         $result = $this->db->query($qry, $params);
 
@@ -688,11 +731,13 @@ class GameService {
     * @param Player $player The Player to save
     */
     public function savePlayer(Player $player) : bool {
-        $qry = "UPDATE players SET x = :x, y = :y  WHERE id = :id";
+        $qry = "UPDATE players SET x = :x, y = :y, health = :health, points = :points WHERE id = :id";
         $params = [
             'id' => $player->getId(),
             'x' => $player->x,
-            'y' => $player->y
+            'y' => $player->y,
+            'health' => $player->health,
+            'points' => $player->points
         ];
         $result = $this->db->query($qry, $params);
 
@@ -725,7 +770,7 @@ class GameService {
             $players = [];
             foreach($rows as $row) {
                 $user = $this->userService->getUser($row['users_id']);
-                $players[] = new Player($row['id'], $user, $row['x'], $row['y']);
+                $players[] = new Player($row['id'], $user, $row['x'], $row['y'], $row['health'], $row['points']);
             }
         }
 

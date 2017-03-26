@@ -9,6 +9,9 @@ class Board extends Model implements \JsonSerializable {
     public $tiles;
     public $width;
     public $height;
+    public $healTiles;
+    public $goldTiles;
+
 
     private $tileMap;
 
@@ -26,9 +29,18 @@ class Board extends Model implements \JsonSerializable {
         $this->height = $height;
         $this->tiles = $tiles;
 
+        $this->healTiles = [];
+        $this->goldTiles = [];
         $this->tileMap = [];
         foreach($tiles as $tile) {
             $this->tileMap[$tile->x][$tile->y] = $tile;
+            
+            if ($tile->type === Tile::TYPE_HEAL) {
+                $this->healTiles[] = $tile;
+            }
+            elseif ($tile->type === Tile::TYPE_GOLD) {
+                $this->goldTiles[] = $tile;
+            }
         }
     }
 
@@ -53,7 +65,9 @@ class Board extends Model implements \JsonSerializable {
             'id' => $this->id,
             'width' => $this->width,
             'height' => $this->height,
-            'tiles' => $this->tiles
+            'tiles' => $this->tiles,
+            'healTiles' => $this->healTiles,
+            'goldTiles' => $this->goldTiles
         ];
     }
 }

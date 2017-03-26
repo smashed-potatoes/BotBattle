@@ -7,7 +7,7 @@
         var pageObject = null;
 
         $(function(){
-            pageObject = new BotBattle(800, 800);
+            pageObject = new BotBattle(700, 700);
 
             $('#viewGame').click(function() {
                 var gameId = $('#gameId').val();
@@ -19,6 +19,13 @@
             WAITING: 0,
             RUNNING: 1,
             DONE: 2
+        };
+
+        BotBattle.tileTypes = {
+            GROUND: 0,
+            WALL: 1,
+            GOLD: 2,
+            HEAL: 3
         };
 
         /**
@@ -35,8 +42,8 @@
             this.ctx.fillRect(0,0, 30, 30);
 
             this.turnSpan = $('#turn');
-            this.playersSpan = $('#players');
-            this.colors = ['#FF0000', '#0FF000', '#00FF00', '#000FF0'];
+            this.playersDiv = $('#players');
+            this.colors = ['#FF5F45', '#105A6A', '#413939', '#1A8B7B'];
             this.playerColors = {};
             this.userTileCount = {};
 
@@ -104,15 +111,13 @@
             }
 
             // Show the current turn
-            this.turnSpan.html(this.state.turn);
+            this.turnSpan.html(this.state.turn + " / " + this.state.length);
 
             // List the users, in their color
-            var players = [];
+            this.playersDiv.html('');
             for (var i=0; i<this.state.players.length; i++) {
-                var player = this.state.players[i];
-                players.push('<span style="color:'+this.playerColors[player.id]+'">' + player.user.username + ':' + this.userTileCount[player.id] + '</span>');
+                this.playersDiv.append(this.getPlayerDiv(this.state.players[i]));
             }
-            this.playersSpan.html(players.join(', '));
 
             this.draw();
 
@@ -120,6 +125,24 @@
                 setTimeout($.proxy(this.getState, this), 50);
             }
         };
+
+        BotBattle.prototype.getPlayerDiv = function(player) {
+            var divHtml = `
+                <div class="player"> 
+                    <span class="playerColor" style="background-color: ` + this.playerColors[player.id] + `">
+                        ` + this.userTileCount[player.id] + `
+                    </span>
+                    <span class="playerHealth">
+                        <span class="bar" style="height: `+player.health/5+`px"></span>
+                    </span>
+                    <span class="playerName">
+                        `+ player.points +` : `+ player.user.username + `
+                    </span>
+                </div>
+            `;
+
+            return $(divHtml);
+        }
 
         /**
         * Draw the current game state to the canvas
@@ -131,11 +154,30 @@
             var players = this.state.players;
             var tileWidth = this.width / this.state.board.width;
             var tileHeight = this.height / this.state.board.width;
+
+            var tenthOfTileWidth = tileWidth/10;
+            var tenthOfTileHeight = tileHeight/10;
             
             for (var i=0; i<tiles.length; i++) {
+                if (tiles[i].type === BotBattle.tileTypes.WALL) {
+                    this.ctx.fillStyle='#666666';
+                }
+                else if (tiles[i].type === BotBattle.tileTypes.GROUND) {
+                    this.ctx.fillStyle='#007B0C';
+                }
+                else if (tiles[i].type === BotBattle.tileTypes.GOLD) {
+                    this.ctx.fillStyle='#EEBB00';
+                }
+                else if (tiles[i].type === BotBattle.tileTypes.HEAL) {
+                    this.ctx.fillStyle='#BB314F';
+                }
+
+                this.ctx.fillRect(tiles[i].x*tileWidth, tiles[i].y*tileHeight, tileWidth, tileHeight);
+
+                // Draw ownership
                 if (tiles[i].player !== null) {
                     this.ctx.fillStyle=this.playerColors[tiles[i].player.id];
-                    this.ctx.fillRect(tiles[i].x*tileWidth, tiles[i].y*tileHeight, tileWidth, tileHeight);
+                    this.ctx.fillRect(tiles[i].x*tileWidth+tenthOfTileWidth, tiles[i].y*tileHeight+tenthOfTileHeight, tenthOfTileWidth, tenthOfTileHeight);
                 }
             }
 
@@ -155,20 +197,15 @@
                 this.ctx.strokeRect(players[i].x*tileWidth + 5 + overlapPadding, players[i].y*tileHeight + 5, tileWidth - 10 - overlapPadding, tileHeight - 10);
             }
 
-            // Draw the grid
-            for (var i=0; i<tiles.length; i++) {
-                this.ctx.strokeRect(tiles[i].x*tileWidth, tiles[i].y*tileHeight, tileWidth, tileHeight);
-            }
-
             // The game has ended, show the winner
             if (this.state.state === BotBattle.states.DONE) {
                 var mostPoints = 0;
                 var winner = null;
                 for (var i=0; i<this.state.players.length; i++) {
                     var player = this.state.players[i];
-                    if (this.userTileCount[player.id] > mostPoints) {
+                    if (player.points > mostPoints) {
                         winner = player;
-                        mostPoints = this.userTileCount[player.id];
+                        mostPoints =player.points;
                     }
                 }
 
@@ -197,30 +234,96 @@
             font-family: sans-serif;
         }
 
-        #controls {
-            width: 800px;
+        #content {
+            width: 900px;
             margin: 20px auto;
+            position: relative;
+        }
 
+        #controls {
+            margin: 10px 0;
             color: #fff;
         }
 
         #canv {
-            display: block;
-            margin: 20px auto;
+            display: inline-block;
+            background-color: #007B0C;
+        }
 
-            background-color: #fff;
+        #playerContainer {
+            position: absolute;
+            display: inline-block;
+            width: 190px;
+            height: 600px;
+            right: 0px;
+
+            background-color: #eee;
+
+            text-align: center;
+        }
+
+        .player {
+            height: 25px;
+            padding: 2px;
+
+            text-align: left;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 25px;
+        }
+
+        .playerColor {
+            float: left;
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            
+            color: #fff;
+            text-align: center;
+            font-size: 10px;
+            font-weight: bold;
+            line-height: 20px;
+            
+
+            border: 1px solid #333;
+        }
+
+        .playerHealth {
+            position: relative;
+            float: left;
+            display: inline-block;
+            height: 20px;
+            width: 5px;
+
+            border: 1px solid #333;
+        }
+
+        .bar {
+            position: absolute;
+            bottom: 0;
+            display: inline-block;
+            background-color: #f00;
+            width: 5px;
+        }
+
+        .playerName {
+            margin-left: 5px;
         }
     </style>
 </head>
 <body>
-<div id="controls">
-    Game <input id="gameId" type="text" value="1"/>
-    <input id="viewGame" type="button" value="View"/>
-    Turn: <span id="turn">0</span>
-    Players: <span id="players"></span>
-</div>
-<canvas id="canv" id="app">
-
+<div id="content">
+    <div id="controls">
+        Game <input id="gameId" type="text" value="1"/>
+        <input id="viewGame" type="button" value="View"/>
+        Turn: <span id="turn">0</span>
+    </div>
+    <canvas id="canv" id="app" ></canvas>
+    <div id="playerContainer">
+        <h1>Players</h1>
+        <div id="players">
+        </div>
+    </div>
 </div>
 </body>
 </html>

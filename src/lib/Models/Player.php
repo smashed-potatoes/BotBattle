@@ -9,6 +9,8 @@ class Player extends Model implements \JsonSerializable{
     public $user;
     public $x;
     public $y;
+    public $health;
+    public $points;
 
     /**
     * Constructor
@@ -16,13 +18,17 @@ class Player extends Model implements \JsonSerializable{
     * @param User $user The user the player is for
     * @param int $x The x coordinate of the player
     * @param int $y The y coordinate of the player
+    * @param int $health The health of the player
+    * @param int $points The number of points the player has
     */
-    public function __construct(int $id, User $user, int $x, int $y){
+    public function __construct(int $id, User $user, int $x, int $y, int $health = 100, int $points = 0) {
         parent::__construct($id);
 
         $this->user = $user;
         $this->x = $x;
         $this->y = $y;
+        $this->health = $health;
+        $this->points = $points;
     }
 
     /**
@@ -34,7 +40,9 @@ class Player extends Model implements \JsonSerializable{
             'id' => $this->id,
             'user' => $this->user,
             'x' => $this->x,
-            'y' => $this->y
+            'y' => $this->y,
+            'health' => $this->health,
+            'points' => $this->points
         ];
     }
 }

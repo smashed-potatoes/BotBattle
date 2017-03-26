@@ -56,6 +56,28 @@ class GameServiceTest extends TestCase {
     }
 
     /**
+    * @depends testJoinGame
+    */
+    public function testSavePlayer($player) {
+        $player->x = 5;
+        $player->y = 5;
+        $player->health = 20;
+        $player->points = 10;
+
+        $result = self::$gameService->savePlayer($player);
+        $this->assertNotEquals(false, $result);
+
+        $player = self::$gameService->getPlayer($player->getId());
+        $this->assertNotEquals(null, $player);
+        $this->assertEquals(5, $player->x);
+        $this->assertEquals(5, $player->y);
+        $this->assertEquals(20, $player->health);
+        $this->assertEquals(10, $player->points);
+
+        return $player;
+    }
+
+    /**
     * @depends testCreateGame
     */
     public function testGetGame($game) {
@@ -74,7 +96,7 @@ class GameServiceTest extends TestCase {
     }
 
     /**
-    * @depends testJoinGame
+    * @depends testSavePlayer
     */
     public function testGetPlayer($player) {
         $player = self::$gameService->getPlayer($player->getId());
