@@ -131,6 +131,11 @@ $app->group("/games", function () use ($botBattle) {
 
         $player = $game->getUserPlayer($user);
         if ($player == null) {
+            // Game isn't waiting for players
+            if ($game->state !== Game::STATE_WAITING) {
+                return $response->withJson(new Error('Game has already started'), 400);
+            }
+            
             $player = $botBattle->gameService->joinGame($game, $user);
         }
 

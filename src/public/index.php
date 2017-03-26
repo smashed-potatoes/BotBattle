@@ -15,6 +15,12 @@
             });
         });
 
+        BotBattle.states = {
+            WAITING: 0,
+            RUNNING: 1,
+            DONE: 2
+        };
+
         /**
         * BotBattle viewer
         */
@@ -31,7 +37,8 @@
             this.turnSpan = $('#turn');
             this.playersSpan = $('#players');
             this.colors = ['#FF0000', '#0FF000', '#00FF00', '#000FF0'];
-            this.playerColors = [];
+            this.playerColors = {};
+            this.userTileCount = {};
 
             // Setup size
             $(this.canvas).prop('width', width);
@@ -83,16 +90,16 @@
 
             // Setup player colors
             this.playerColors = {};
-            var userTileCount = {};
+            this.userTileCount = {};
             for (var i=0; i<this.state.players.length; i++) {
                 this.playerColors[this.state.players[i].id] = this.colors[i];
-                userTileCount[this.state.players[i].id] = 0;
+                this.userTileCount[this.state.players[i].id] = 0;
             }
 
             // Get the user tile counts
             for (var i=0; i<tiles.length; i++) {
                 if (tiles[i].player !== null) {
-                    userTileCount[tiles[i].player.id]++;
+                    this.userTileCount[tiles[i].player.id]++;
                 }
             }
 
@@ -103,13 +110,13 @@
             var players = [];
             for (var i=0; i<this.state.players.length; i++) {
                 var player = this.state.players[i];
-                players.push('<span style="color:'+this.playerColors[player.id]+'">' + player.user.username + ':' + userTileCount[player.id] + '</span>');
+                players.push('<span style="color:'+this.playerColors[player.id]+'">' + player.user.username + ':' + this.userTileCount[player.id] + '</span>');
             }
             this.playersSpan.html(players.join(', '));
 
             this.draw();
 
-            if (this.running) {
+            if (this.running && this.state.state !== BotBattle.states.DONE) {
                 setTimeout($.proxy(this.getState, this), 50);
             }
         };
@@ -151,6 +158,30 @@
             // Draw the grid
             for (var i=0; i<tiles.length; i++) {
                 this.ctx.strokeRect(tiles[i].x*tileWidth, tiles[i].y*tileHeight, tileWidth, tileHeight);
+            }
+
+            // The game has ended, show the winner
+            if (this.state.state === BotBattle.states.DONE) {
+                var mostPoints = 0;
+                var winner = null;
+                for (var i=0; i<this.state.players.length; i++) {
+                    var player = this.state.players[i];
+                    if (this.userTileCount[player.id] > mostPoints) {
+                        winner = player;
+                        mostPoints = this.userTileCount[player.id];
+                    }
+                }
+
+                var winnerString = (winner !== null) ? winner.user.username + " wins!" : "Tie game!"
+
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+                this.ctx.fillRect(20, this.height/2 - 50, this.width - 40, 100);
+                
+                this.ctx.font = "50px Arial";
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle"; 
+                this.ctx.fillText(winnerString, this.width/2, this.height/2);
             }
         };
 

@@ -111,7 +111,12 @@ class GameService {
     *
     * @return Player The player for the user that joined
     */
-    public function joinGame(Game $game, User $user) : Player {
+    public function joinGame(Game $game, User $user) { //: ?Player {
+        // Can only join when the game is waiting for players
+        if ($game->state !== Game::STATE_WAITING) {
+            return null;
+        }
+
         $player = $this->createPlayer($game, $user, 0, 0);
         
         // Auto start when 2 players are in
@@ -320,6 +325,25 @@ class GameService {
     * @return Move The move that was made
     */
     public function makeMove(Game $game, Player $player, int $action) : Move {
+        // Check if the player has already moved
+        $qry = "SELECT * FROM moves WHERE games_id = :gameId AND players_id = :playerId AND turn = :turn";
+        $params = [
+            'gameId' => $game->getId(),
+            'playerId'=> $player->getId(),
+            'turn'=> $game->turn
+        ];
+        $result = $this->db->query($qry, $params);
+
+        if ($result->error !== null) {
+            throw new \Exception($result->error);
+        }
+
+        if ($row = $result->statement->fetch(\PDO::FETCH_ASSOC)) {
+            // User has laready moved, return their previous move
+            return new Move($row['id'], $player, $game->turn, $row['action']);
+        }
+
+        // User hasn't moved, check if the requested move is valid
         switch ($action) {
             case Move::ACTION_LEFT:
                 // Cannot move further left, default to none
