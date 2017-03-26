@@ -8,9 +8,18 @@
 
         $(function(){
             pageObject = new BotBattle(800, 800);
+
+            $('#viewGame').click(function() {
+                var gameId = $('#gameId').val();
+                pageObject.viewGame(gameId);
+            });
         });
 
+        /**
+        * BotBattle viewer
+        */
         function BotBattle(width, height) {
+            this.gameId = null;
             this.running = false;
             this.width = width;
             this.height = height;
@@ -19,6 +28,11 @@
             this.ctx = this.canvas.getContext('2d');
             this.ctx.fillRect(0,0, 30, 30);
 
+            this.turnSpan = $('#turn');
+            this.playersSpan = $('#players');
+            this.colors = ['#FF0000', '#0FF000', '#00FF00', '#000FF0'];
+            this.playerColors = [];
+
             // Setup size
             $(this.canvas).prop('width', width);
             $(this.canvas).prop('height', height);
@@ -26,22 +40,73 @@
             $(this.canvas).css('height', height + "px");
         }
 
+        /**
+        * View a game
+        */
+        BotBattle.prototype.viewGame = function(gameId) {
+            this.gameId = gameId;
+            this.start();
+        };
+
+        /**
+        * Start polling the current game
+        */
         BotBattle.prototype.start = function() {
             this.running = true;
             this.getState();
         };
 
+        /**
+        * Stop polling the current game
+        */
         BotBattle.prototype.stop = function() {
             this.running = false;
         };
 
+        /**
+        * Get the current game state
+        */
         BotBattle.prototype.getState = function() {
-            $.get('api/', $.proxy(this.onState, this));
+            if (this.stateRequest) {
+                this.stateRequest.abort();
+            }
+            this.stateRequest = $.get('api/games/' + this.gameId, $.proxy(this.onState, this));
         };
 
+        /**
+        * Process the recieved game state
+        */
         BotBattle.prototype.onState = function(data) {
             // TODO: Validate data
             this.state = data;
+            var tiles = this.state.board.tiles;
+
+            // Setup player colors
+            this.playerColors = {};
+            var userTileCount = {};
+            for (var i=0; i<this.state.players.length; i++) {
+                this.playerColors[this.state.players[i].id] = this.colors[i];
+                userTileCount[this.state.players[i].id] = 0;
+            }
+
+            // Get the user tile counts
+            for (var i=0; i<tiles.length; i++) {
+                if (tiles[i].player !== null) {
+                    userTileCount[tiles[i].player.id]++;
+                }
+            }
+
+            // Show the current turn
+            this.turnSpan.html(this.state.turn);
+
+            // List the users, in their color
+            var players = [];
+            for (var i=0; i<this.state.players.length; i++) {
+                var player = this.state.players[i];
+                players.push('<span style="color:'+this.playerColors[player.id]+'">' + player.user.username + ':' + userTileCount[player.id] + '</span>');
+            }
+            this.playersSpan.html(players.join(', '));
+
             this.draw();
 
             if (this.running) {
@@ -49,30 +114,43 @@
             }
         };
 
+        /**
+        * Draw the current game state to the canvas
+        */
         BotBattle.prototype.draw = function() {
             this.ctx.clearRect(0,0, this.width, this.height);
 
             var tiles = this.state.board.tiles;
-            var tileWidth = this.width / tiles.length;
-            var tileHeight = this.height / tiles[0].length;
+            var players = this.state.players;
+            var tileWidth = this.width / this.state.board.width;
+            var tileHeight = this.height / this.state.board.width;
             
-            for (var x=0; x<tiles.length; x++) {
-                for (var y=0; y<tiles[x].length; y++) {
-                    if (tiles[x][y].owner == 0) {
-                        this.ctx.fillStyle="#FF0000";
-                    }
-                    else {
-                        this.ctx.fillStyle="#0000FF";
-                    }
-                    this.ctx.fillRect(x*tileWidth, y*tileHeight, tileWidth, tileHeight);
+            for (var i=0; i<tiles.length; i++) {
+                if (tiles[i].player !== null) {
+                    this.ctx.fillStyle=this.playerColors[tiles[i].player.id];
+                    this.ctx.fillRect(tiles[i].x*tileWidth, tiles[i].y*tileHeight, tileWidth, tileHeight);
                 }
             }
 
-            // Draw the grid
-            for (var x=0; x<tiles.length; x++) {
-                for (var y=0; y<tiles[x].length; y++) {
-                    this.ctx.strokeRect(x*tileWidth, y*tileHeight, tileWidth, tileHeight);
+            for (var i=0; i<players.length; i++) {
+                var overlaps = 0;
+                for (var j=0; j<players.length; j++) {
+                    if (i == j) continue;
+                    if (players[i].x == players[j].x && players[i].y == players[j].y) {
+                        overlaps++;
+                    }
                 }
+
+                var overlapPadding = overlaps > 0 ? (tileWidth-10)/(overlaps+1)*i : 0;
+
+                this.ctx.fillStyle=this.playerColors[players[i].id];
+                this.ctx.fillRect(players[i].x*tileWidth + 5 + overlapPadding, players[i].y*tileHeight + 5, tileWidth - 10 - overlapPadding, tileHeight - 10);
+                this.ctx.strokeRect(players[i].x*tileWidth + 5 + overlapPadding, players[i].y*tileHeight + 5, tileWidth - 10 - overlapPadding, tileHeight - 10);
+            }
+
+            // Draw the grid
+            for (var i=0; i<tiles.length; i++) {
+                this.ctx.strokeRect(tiles[i].x*tileWidth, tiles[i].y*tileHeight, tileWidth, tileHeight);
             }
         };
 
@@ -84,6 +162,15 @@
             padding: 0;
 
             background-color: #333;
+
+            font-family: sans-serif;
+        }
+
+        #controls {
+            width: 800px;
+            margin: 20px auto;
+
+            color: #fff;
         }
 
         #canv {
@@ -95,6 +182,12 @@
     </style>
 </head>
 <body>
+<div id="controls">
+    Game <input id="gameId" type="text" value="1"/>
+    <input id="viewGame" type="button" value="View"/>
+    Turn: <span id="turn">0</span>
+    Players: <span id="players"></span>
+</div>
 <canvas id="canv" id="app">
 
 </div>

@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 sudo apt-get update
 
-
 ### System level items
 # Apache
 sudo apt-get install -y apache2
@@ -10,6 +9,8 @@ sudo apt-get install -y php
 sudo apt-get install -y php-mysql
 sudo apt-get install -y php-curl php-json php-cgi libapache2-mod-php
 sudo apt-get install -y php-gd
+# Python
+sudo apt-get install -y python
 # MySQL
 sudo debconf-set-selections <<< 'mysql-server mysql-server/root_password password blank'
 sudo debconf-set-selections <<< 'mysql-server mysql-server/root_password_again password blank'
@@ -21,7 +22,7 @@ sudo apt-get install -y zip
 ### Configure apache
 sudo systemctl enable apache2
 sudo rm -f /etc/apache2/sites-enabled/*
-sudo cp /vagrant/deploy_resources/project.conf /etc/apache2/sites-enabled/
+sudo cp /vagrant/deploy_resources/apache_site.conf /etc/apache2/sites-enabled/project.conf
 sudo a2enmod rewrite
 sudo systemctl start apache2
 

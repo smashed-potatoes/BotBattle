@@ -1,25 +1,36 @@
 <?php namespace BotBattle;
 
-use BotBattle\Models\Board;
-use BotBattle\Models\Player;
+use BotBattle\Config;
+use BotBattle\Data\Db;
 
-class BotBattle implements \JsonSerializable {
-    public $board;
-    public $players;
+use BotBattle\Services\UserService;
+use BotBattle\Services\GameService;
 
-    function __construct(){
-        // TODO: Load state
-        $this->board = new Board(10, 10);
-        $this->players = [
-            new Player('Bob', 0, 0),
-            new Player('Steve', 3,3)
-        ];
-    }
+/**
+* The BotBattle main entry point
+*/
+class BotBattle {
 
-    public function jsonSerialize() {
-        return [
-            'board' => $this->board,
-            'players' => $this->players
-        ];
+    private $config;
+    private $db;
+
+    public $userService;
+    public $gameService;
+
+    /**
+    * Constructor
+    * @param Config $config The configuration to use
+    */
+    public function __construct(Config $config){
+        $this->config = $config;
+        $this->db = new Db(
+            $this->config->get(Config::DB_HOST),
+            $this->config->get(Config::DB_DATABASE),
+            $this->config->get(Config::DB_USER),
+            $this->config->get(Config::DB_PASS)
+        );
+
+        $this->userService = new UserService($this->db);
+        $this->gameService = new GameService($this->db, $this->userService);
     }
 }

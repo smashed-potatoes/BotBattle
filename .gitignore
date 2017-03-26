@@ -1,3 +1,6 @@
-.vagrant/
-src/vendor
 ubuntu-xenial-16.04-cloudimg-console.log
+.vagrant/
+deploy_resources/app.cfg
+
+src/vendor
+src/public/api/config.php

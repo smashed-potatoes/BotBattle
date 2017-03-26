@@ -1,0 +1,9 @@
+<?php
+require_once __DIR__ . '/../../vendor/autoload.php';
+use \BotBattle\Config;
+
+return [
+    Config::DB_HOST => 'db.hostname.com',
+    Config::DB_USER => 'battle_admin',
+    Config::DB_PASS => 'db_password'
+];
