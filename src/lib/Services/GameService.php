@@ -58,7 +58,7 @@ class GameService {
         // Insert the board
         // TODO: Legnth of game and size  by difficulty?
         $gameLength = 500;
-        $board = $this->createBoard(11, 11);
+        $board = $this->createBoard(11, 11, $difficulty);
 
         // Insert the game
         $qry = "INSERT INTO games (boards_id, difficulty, state, turn, length) VALUES (:boardId, :difficulty, 0, 0, :gameLength)";
@@ -448,6 +448,8 @@ class GameService {
         // Update tile ownership
         foreach ($game->players as $player) {
             $alone = true;
+            $tile = $game->board->getTileAt($player->x, $player->y);
+
             foreach ($game->players as $otherPlayer) {
                 // Ignore self
                 if ($player === $otherPlayer) continue;
@@ -455,12 +457,15 @@ class GameService {
                 // Sharing a space with another player
                 if ($player->x === $otherPlayer->x && $player->y === $otherPlayer->y) {
                     $alone = false;
-                    $otherPlayer->health = $otherPlayer->health - 20;
+
+                    // Can't attack while healing
+                    if ($tile->type !== Tile::TYPE_HEAL){
+                        $otherPlayer->health = $otherPlayer->health - 20;
+                    }
                 }
             }
 
             // When alone on a gold tile, take control of it
-            $tile = $game->board->getTileAt($player->x, $player->y);
             if ( $alone && $tile->type === Tile::TYPE_GOLD 
                 && ($tile->player == null || $tile->player->getId() !== $player->getId()) ){
                 $player->health -= 20;
@@ -471,7 +476,7 @@ class GameService {
                 }
             }
             // Heal on health tiles
-            elseif ( $tile->type === Tile::TYPE_HEAL) {
+            elseif ($tile->type === Tile::TYPE_HEAL) {
                 $player->health += 20;
                 $player->health = $player->health > 100 ? 100 : $player->health;
             }
@@ -522,10 +527,11 @@ class GameService {
     * Create a new board
     * @param int $width The width of the board
     * @param int $height The height of the board
+    * @param int $level The level to load
     *
     * @return Board The board that is created
     */
-    private function createBoard(int $width, int $height) : Board {
+    private function createBoard(int $width, int $height, int $level) : Board {
         // Create new board
         $qry = "INSERT INTO boards (width, height) VALUES (:width, :height)";
         $params = [
@@ -541,28 +547,68 @@ class GameService {
         $id = $this->db->insertId();
 
         // Create tiles
-        // TODO: Load map
         $tiles = [];
         for ($x=0; $x<$width; $x++) {
             for ($y=0; $y<$height; $y++) {
                 $type = Tile::TYPE_GROUND;
 
-                // Put healing in the center
-                if ( ($x == floor($width / 2) + 1 && $y == floor($height / 2))
-                    || ($x == floor($width / 2) - 1 && $y == floor($height / 2)) ) {
-                    $type = Tile::TYPE_HEAL;
+                // TODO: Load map
+                if ($level == 1) {
+                    // Put healing in the center
+                    if ( ($x == floor($width / 2) + 1 && $y == floor($height / 2))
+                        || ($x == floor($width / 2) - 1 && $y == floor($height / 2)) ) {
+                        $type = Tile::TYPE_HEAL;
+                    }
+                    // Put gold in corners
+                    elseif (($x === 0 && $y === 0)
+                        || ($x === 0 && $y === $height - 1)
+                        || ($y === 0 && $x === $width - 1)
+                        || ($x === $width - 1 && $y === $height - 1)) {
+                        $type = Tile::TYPE_GOLD;
+                    }
+                    // Put wall across the center
+                    elseif (($x == floor($width / 2) && $y > 0 && $y < $height - 1)
+                        || ($y == floor($height / 2) && $x > 0 && $x < $width - 1)) {
+                        $type = Tile::TYPE_WALL;
+                    }
                 }
-                // Put gold in corners
-                elseif (($x === 0 && $y === 0)
-                    || ($x === 0 && $y === $height - 1)
-                    || ($y === 0 && $x === $width - 1)
-                    || ($x === $width - 1 && $y === $height - 1)) {
-                    $type = Tile::TYPE_GOLD;
+                elseif ($level == 2) {
+                    // Put gold in the center
+                    if ( ($x == floor($width / 2) + 1 && $y == floor($height / 2))
+                        || ($x == floor($width / 2) - 1 && $y == floor($height / 2)) ) {
+                        $type = Tile::TYPE_GOLD;
+                    }
+                    // Put healing in corners
+                    elseif (($x === 0 && $y === 0)
+                        || ($x === 0 && $y === $height - 1)
+                        || ($y === 0 && $x === $width - 1)
+                        || ($x === $width - 1 && $y === $height - 1)) {
+                        $type = Tile::TYPE_HEAL;
+                    }
+                    // Put wall around the border, gaps along the sides
+                    elseif ( (($x == 1 || $x == $width - 2) && ($y > 0 && $y < $height -1 && $y != floor($height / 2)))
+                        || (($y == 1 || $y == $height - 2) && ($x > 0 && $x < $width -1 && $x != floor($width / 2))) ) {
+                        $type = Tile::TYPE_WALL;
+                    }
                 }
-                // Put wall across the center
-                elseif (($x == floor($width / 2) && $y > 0 && $y < $height - 1)
-                    || ($y == floor($height / 2) && $x > 0 && $x < $width - 1)) {
-                    $type = Tile::TYPE_WALL;
+                else {
+                    // Put gold in the center
+                    if ( ($x == floor($width / 2) + 1 && $y == floor($height / 2))
+                        || ($x == floor($width / 2) - 1 && $y == floor($height / 2)) ) {
+                        $type = Tile::TYPE_GOLD;
+                    }
+                    // Put healing in corners
+                    elseif (($x === 0 && $y === 0)
+                        || ($x === 0 && $y === $height - 1)
+                        || ($y === 0 && $x === $width - 1)
+                        || ($x === $width - 1 && $y === $height - 1)) {
+                        $type = Tile::TYPE_HEAL;
+                    }
+                    // Put wall across the center
+                    elseif (($x == floor($width / 2) && $y > 0 && $y < $height - 1)
+                        || ($y == floor($height / 2) && $x > 0 && $x < $width - 1)) {
+                        $type = Tile::TYPE_WALL;
+                    }
                 }
                 $tiles[] = $this->createTile($id, $x, $y, $type);
             }
