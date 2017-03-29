@@ -19,6 +19,7 @@ class Game extends Model implements \JsonSerializable {
     public $players;
 
     public $difficulty;
+    public $maxPlayers;
     public $turn;
     public $state;
     public $length;
@@ -29,17 +30,19 @@ class Game extends Model implements \JsonSerializable {
     * @param Board $board The board with the tiles for the game
     * @param array $players The players that have joined the game
     * @param int $difficulty The difficulty of the game
+    * @param int $maxPlayers The max number of players for the level
     * @param int $length The length of the game (total number of turns)
     * @param int $state The current state of the game - should be one of Game::STATE_WAITING, Game::STATE_RUNNING, Game::STATE_DONE
     * @param int $turn The current turn of the game
     */
-    public function __construct(int $id, Board $board, array $players, int $difficulty, int $length=500, int $state = 0, int $turn = 0){
+    public function __construct(int $id, Board $board, array $players, int $difficulty, int $maxPlayers, int $length=500, int $state = 0, int $turn = 0){
         parent::__construct($id);
 
         $this->board = $board;
         $this->players = $players;
         
         $this->difficulty = $difficulty;
+        $this->maxPlayers = $maxPlayers;
         $this->state = $state;
         $this->turn = $turn;
         $this->length = $length;
@@ -86,6 +89,7 @@ class Game extends Model implements \JsonSerializable {
             'id' => $this->id,
             'board' => $this->board,
             'players' => $this->players,
+            'maxPlayers' => $this->maxPlayers,
             'difficulty' => $this->difficulty,
             'state' => $this->state,
             'turn' => $this->turn,

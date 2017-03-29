@@ -66,6 +66,7 @@ CREATE TABLE `games` (
   `id` int(11) NOT NULL,
   `boards_id` int(11) NOT NULL,
   `difficulty` int(11) NOT NULL,
+  `max_players` int(11) NOT NULL,
   `state` int(11) NOT NULL,
   `turn` int(11) NOT NULL,
   `length` int(11) NOT NULL

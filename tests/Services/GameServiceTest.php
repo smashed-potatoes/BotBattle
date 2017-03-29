@@ -120,7 +120,7 @@ class GameServiceTest extends TestCase {
     }
 
     public function testPlayGame() {
-        $game = self::$gameService->createGame(0);
+        $game = self::$gameService->createGame(2);
         $userA = self::$userService->addUser('UnitTestUser-A');
         $userB = self::$userService->addUser('UnitTestUser-B');
         $playerA = self::$gameService->joinGame($game, $userA);

@@ -37,34 +37,43 @@ class GameService {
     * @return Game The created or matching existing game
     */
     public function createGame(int $difficulty) : Game {
-        // First check for an existing game with only one player and the same difficulty
-        $qry = "SELECT games_id FROM (
-                    SELECT games_id, count(players.id) as count
-                    FROM players
-                    GROUP BY games_id
-                ) as game_players
-                WHERE count = 1
+        // First check for an existing game that hasn't started
+        $qry = "SELECT id FROM games 
+                WHERE difficulty = :difficulty
+                AND state = :state
                 LIMIT 1";
-        $result = $this->db->query($qry);
+        $params = [
+            'difficulty' => $difficulty,
+            'state' => Game::STATE_WAITING
+        ];
+        $result = $this->db->query($qry, $params);
 
         if ($result->error !== null) {
             throw new \Exception($result->error);
         }
 
         if ($row = $result->statement->fetch(\PDO::FETCH_ASSOC)) {
-            return $this->getGame($row['games_id']);
+            return $this->getGame($row['id']);
         }
 
         // Insert the board
-        // TODO: Legnth of game and size  by difficulty?
+        // TODO: Load level from difficulty
+        $maxPlayers = 1;
+        if ($difficulty > 4) {
+            $maxPlayers = 3;
+        }
+        elseif ($difficulty > 1) {
+            $maxPlayers = 2;
+        }
         $gameLength = 500;
         $board = $this->createBoard(11, 11, $difficulty);
 
         // Insert the game
-        $qry = "INSERT INTO games (boards_id, difficulty, state, turn, length) VALUES (:boardId, :difficulty, 0, 0, :gameLength)";
+        $qry = "INSERT INTO games (boards_id, difficulty, max_players, state, turn, length) VALUES (:boardId, :difficulty, :maxPlayers, 0, 0, :gameLength)";
         $params = [
             'boardId' => $board->getId(),
             'difficulty' => $difficulty,
+            'maxPlayers' => $maxPlayers,
             'gameLength' => $gameLength
         ];
         $result = $this->db->query($qry, $params);
@@ -78,7 +87,7 @@ class GameService {
         // Players starts empty - users must join
         $players = [];
 
-        return new Game($id, $board, $players, $difficulty, 500);
+        return new Game($id, $board, $players, $difficulty, $maxPlayers, $gameLength);
     }
 
     /**
@@ -121,7 +130,7 @@ class GameService {
         
         // Auto start when 2 players are in
         $game = $this->getGame($game->getId());
-        if (count($game->players) > 1) {
+        if (count($game->players) === $game->maxPlayers) {
             $game = $this->startGame($game);
         }
 
@@ -194,7 +203,7 @@ class GameService {
             $board = $this->getBoard($row['boards_id']);
             $players = $this->getGamePlayers($id);
 
-            return new Game($row['id'], $board, $players, $row['difficulty'], $row['length'], $row['state'], $row['turn']);
+            return new Game($row['id'], $board, $players, $row['difficulty'], $row['max_players'], $row['length'], $row['state'], $row['turn']);
         }
 
         return null;
@@ -445,48 +454,63 @@ class GameService {
         // Get updated game state
         $game = $this->getGame($game->getId());
 
-        // Update tile ownership
-        foreach ($game->players as $player) {
-            $alone = true;
-            $tile = $game->board->getTileAt($player->x, $player->y);
+        // Interact with tiles
+        // TODO: Separate to per-level logic
+        if ($game->difficulty < 2) {
+            foreach ($game->players as $player) {
+                $tile = $game->board->getTileAt($player->x, $player->y);
 
-            foreach ($game->players as $otherPlayer) {
-                // Ignore self
-                if ($player === $otherPlayer) continue;
-
-                // Sharing a space with another player
-                if ($player->x === $otherPlayer->x && $player->y === $otherPlayer->y) {
-                    $alone = false;
-
-                    // Can't attack while healing
-                    if ($tile->type !== Tile::TYPE_HEAL){
-                        $otherPlayer->health = $otherPlayer->health - 20;
-                    }
-                }
-            }
-
-            // When alone on a gold tile, take control of it
-            if ( $alone && $tile->type === Tile::TYPE_GOLD 
-                && ($tile->player == null || $tile->player->getId() !== $player->getId()) ){
-                $player->health -= 20;
-
-                if ($player->health > 0) {
+                if ($tile->type === Tile::TYPE_GOLD) {
                     $tile->player = $player;
                     $this->saveTile($tile);
+                    $player->points = 100;
+                    $game->state = Game::STATE_DONE;
                 }
             }
-            // Heal on health tiles
-            elseif ($tile->type === Tile::TYPE_HEAL) {
-                $player->health += 20;
-                $player->health = $player->health > 100 ? 100 : $player->health;
-            }
         }
+        else {
+            foreach ($game->players as $player) {
+                $alone = true;
+                $tile = $game->board->getTileAt($player->x, $player->y);
 
-        // Update the player points
-        foreach ($game->board->goldTiles as $goldTile) {
-            if ($goldTile->player !== null) {
-                $player = $game->getPlayerById($goldTile->player->getId());
-                $player->points++;
+                foreach ($game->players as $otherPlayer) {
+                    // Ignore self
+                    if ($player === $otherPlayer) continue;
+
+                    // Sharing a space with another player
+                    if ($player->x === $otherPlayer->x && $player->y === $otherPlayer->y) {
+                        $alone = false;
+
+                        // Can't attack while healing
+                        if ($tile->type !== Tile::TYPE_HEAL){
+                            $otherPlayer->health = $otherPlayer->health - 20;
+                        }
+                    }
+                }
+
+                // When alone on a gold tile, take control of it
+                if ( $alone && $tile->type === Tile::TYPE_GOLD 
+                    && ($tile->player == null || $tile->player->getId() !== $player->getId()) ){
+                    $player->health -= 20;
+
+                    if ($player->health > 0) {
+                        $tile->player = $player;
+                        $this->saveTile($tile);
+                    }
+                }
+                // Heal on health tiles
+                elseif ($tile->type === Tile::TYPE_HEAL) {
+                    $player->health += 20;
+                    $player->health = $player->health > 100 ? 100 : $player->health;
+                }
+            }
+
+            // Update the player points
+            foreach ($game->board->goldTiles as $goldTile) {
+                if ($goldTile->player !== null) {
+                    $player = $game->getPlayerById($goldTile->player->getId());
+                    $player->points++;
+                }
             }
         }
 
@@ -553,7 +577,23 @@ class GameService {
                 $type = Tile::TYPE_GROUND;
 
                 // TODO: Load map
-                if ($level == 1) {
+                if ($level == 0) {
+                    // Put gold directly oposite
+                    if ($x === $width - 1 &&$y == floor($height / 2)) {
+                        $type = Tile::TYPE_GOLD;
+                    }
+                }
+                elseif ($level == 1) {
+                    // Put gold directly oposite
+                    if ($x === $width - 1 &&$y == floor($height / 2)) {
+                        $type = Tile::TYPE_GOLD;
+                    }
+                    // Put wall across the center
+                    elseif ($x == floor($width / 2) && $y > 0 && $y < $height - 1) {
+                        $type = Tile::TYPE_WALL;
+                    }
+                }
+                elseif ($level == 2) {
                     // Put healing in the center
                     if ( ($x == floor($width / 2) + 1 && $y == floor($height / 2))
                         || ($x == floor($width / 2) - 1 && $y == floor($height / 2)) ) {
@@ -572,7 +612,7 @@ class GameService {
                         $type = Tile::TYPE_WALL;
                     }
                 }
-                elseif ($level == 2) {
+                elseif ($level == 3) {
                     // Put gold in the center
                     if ( ($x == floor($width / 2) + 1 && $y == floor($height / 2))
                         || ($x == floor($width / 2) - 1 && $y == floor($height / 2)) ) {

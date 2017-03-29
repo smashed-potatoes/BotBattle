@@ -209,7 +209,13 @@
                     }
                 }
 
-                var winnerString = (winner !== null) ? winner.user.username + " wins!" : "Tie game!"
+                var winnerString = "";
+                if (this.state.players.length == 1) {
+                    winnerString = (winner !== null) ? winner.user.username + " wins!" : "GAME OVER";
+                }
+                else {
+                    winnerString = (winner !== null) ? winner.user.username + " wins!" : "Tie game!";
+                }
 
                 this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
                 this.ctx.fillRect(20, this.height/2 - 50, this.width - 40, 100);
