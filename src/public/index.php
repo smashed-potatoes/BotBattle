@@ -33,9 +33,11 @@
         */
         function BotBattle(width, height) {
             this.gameId = null;
+            this.state = null;
             this.running = false;
             this.width = width;
             this.height = height;
+            this.turn = null;
 
             this.canvas = document.getElementById('canv');
             this.ctx = this.canvas.getContext('2d');
@@ -66,6 +68,10 @@
         * Start polling the current game
         */
         BotBattle.prototype.start = function() {
+            if (this.stepTimeout) {
+                clearTimeout(this.stepTimeout);
+            }
+
             this.running = true;
             this.getState();
         };
@@ -84,6 +90,7 @@
             if (this.stateRequest) {
                 this.stateRequest.abort();
             }
+
             this.stateRequest = $.get('api/games/' + this.gameId, $.proxy(this.onState, this));
         };
 
@@ -91,6 +98,66 @@
         * Process the recieved game state
         */
         BotBattle.prototype.onState = function(data) {
+            // Game is done, request all data
+            if (data.state === BotBattle.states.DONE) {
+                this.getAllStates();
+                return;
+            }
+
+            if (this.state === null || (this.state.turn !== data.turn)) {
+                this.loadState(data);
+            }
+
+            if (this.running && this.state.state !== BotBattle.states.DONE) {
+                setTimeout($.proxy(this.getState, this), 50);
+            }
+            else if (this.state.state === BotBattle.states.DONE) {
+                this.state = null;
+            }
+        };
+
+        /**
+        * Get the all game states
+        */
+        BotBattle.prototype.getAllStates = function() {
+            if (this.stateRequest) {
+                this.stateRequest.abort();
+            }
+
+            this.stateRequest = $.get('api/games/' + this.gameId + '/states', $.proxy(this.onAllStates, this));
+        };
+
+        /**
+        * Process the recieved game states
+        */
+        BotBattle.prototype.onAllStates = function(data) {
+            this.allStates = data;
+            this.turn = 0;
+            this.stepGame();
+        };
+
+        /**
+        * Render the current state and advance the game to the next turn
+        */
+        BotBattle.prototype.stepGame = function() {
+            if (this.state === null || this.turn <= this.state.length) {
+                this.loadState(this.allStates[this.turn]);
+                this.turn++;
+
+                if (this.running && this.state.state !== BotBattle.states.DONE) {
+                    this.stepTimeout = setTimeout($.proxy(this.stepGame, this), 50);
+                }
+                else if (this.state.state === BotBattle.states.DONE) {
+                    this.state = null;
+                }
+            }
+        };
+
+
+        /**
+        * Load a game state into the viewer
+        */
+        BotBattle.prototype.loadState = function(data) {
             // TODO: Validate data
             this.state = data;
             var tiles = this.state.board.tiles;
@@ -120,10 +187,6 @@
             }
 
             this.draw();
-
-            if (this.running && this.state.state !== BotBattle.states.DONE) {
-                setTimeout($.proxy(this.getState, this), 50);
-            }
         };
 
         BotBattle.prototype.getPlayerDiv = function(player) {
@@ -205,7 +268,11 @@
                     var player = this.state.players[i];
                     if (player.points > mostPoints) {
                         winner = player;
-                        mostPoints =player.points;
+                        mostPoints = player.points;
+                    }
+                    else if  (player.points == mostPoints) {
+                        winner = null;
+                        mostPoints = player.points;
                     }
                 }
 

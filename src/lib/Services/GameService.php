@@ -361,8 +361,11 @@ class GameService {
         $id = $this->db->insertId();
         $move = new Move($id, $player, $game->turn, $action);
 
-        // Check of the turn is done
-        $this->processTurn($game);
+        // Check of the turn is done (all players have moved)
+        $moves = $this->getTurnMoves($game);
+        if (count($moves) === count($game->players)) {
+            $this->advanceGame($game);
+        }
 
         return $move;
     }
@@ -370,15 +373,16 @@ class GameService {
     /**
     * Get the moves for the current turn within a game
     * @param Game $game The game to get the moves for
+    * @param int $turn The turn to get the moves for
     *
     * @return array The moves for the game's current turn
     */
-    public function getTurnMoves(Game $game) : array {
+    public function getTurnMoves(Game $game, int $turn = null) : array {
         // Check if all players have moved and update state
         $qry = "SELECT * FROM moves WHERE games_id = :gameId AND turn = :turn";
         $params = [
             'gameId' => $game->getId(),
-            'turn' => $game->turn
+            'turn' => ($turn !== null) ? $turn : $game->turn
         ];
         $result = $this->db->query($qry, $params);
 
@@ -398,22 +402,113 @@ class GameService {
     }
 
     /**
-    * Process the games current turn
-    * If there are players that haven't moved, nothing will be done
-    * @param Game $game The game to process the turn for
+    * Gets the sequences of states for the game
+    * @param Game $game The game to get all of the states for
+    *
+    * @return array An array of Games for each turn of the game
     */
-    private function processTurn(Game $game) {
-        $moves = $this->getTurnMoves($game);
-
-        if (count($moves) !== count($game->players)) {
-            // Some players haven't made moves yet
-            return;
+    public function getGameStates(Game $game) {
+        $turn = $game->turn;
+        $states = [];
+        // Start from the beginning
+        $this->resetGame($game);
+        $states[] = clone $game;
+        for ($i=0; $i<=$turn; $i++) {
+            $this->processTurn($game, $i);
+            $states[] = unserialize(serialize($game));;
         }
+
+        return $states;
+    }
+
+
+    /**
+    * Gets the state of the game at a particular turn
+    * @param Game $game The game to get the state for
+    * @param int $turn The turn to get the state for
+    *
+    * @return Game The state of the game at the given turn
+    */
+    public function getTurnState(Game $game, int $turn) : Game {
+        // Start from the beginning
+        $this->resetGame($game);
+        for ($i=0; $i<=$turn; $i++) {
+            $this->processTurn($game, $i);
+        }
+
+        return $game;
+    }
+
+    /**
+    * Reset a game to its initial state
+    * @param Game $game The game to reset
+    */
+    private function resetGame(Game $game) {
+        $horizontalCenter = floor($game->board->width / 2);
+        $verticalCenter = floor($game->board->height / 2);
+        $startingPositions = [
+            [ 'x' => 0,                     'y' => $verticalCenter],
+            [ 'x' => $game->board->width-1, 'y' => $verticalCenter],
+            [ 'x' => $horizontalCenter,     'y' => 0],
+            [ 'x' => $horizontalCenter,     'y' => $game->board->height-1]
+        ];
+
+        // Position the players
+        for ($i=0; $i < count($game->players); $i++) {
+            $player = $game->players[$i];
+            $player->health = 100;
+            $player->points = 0;
+            $player->x = $startingPositions[$i]['x'];
+            $player->y = $startingPositions[$i]['y'];
+        }
+
+        // Reset the gold tiles
+        foreach ($game->board->goldTiles as $goldTile) {
+            $goldTile->player = null;
+        }
+
+        $game->turn = 0;
+        $game->state = Game::STATE_RUNNING;
+    }
+
+    /**
+    * Process the current turn and advance the game to the next turn
+    * @param Game $game The game to advance
+    */
+    private function advanceGame(Game $game) {
+        $this->processTurn($game);
+
+        // Save the players
+        foreach ($game->players as $player) {
+            if (!$this->savePlayer($player)) {
+                throw new \Exception('Error saving player');
+            }
+        }
+
+        // Save the gold tiles
+        foreach ($game->board->goldTiles as $goldTile) {
+            if (!$this->saveTile($goldTile)) {
+                throw new \Exception('Error saving tile');
+            }
+        }
+
+        $this->saveGame($game);
+    }
+
+    /**
+    * Process the games current turn
+    * @param Game $game The game to process the turn for
+    * @param int $turn The turn to process
+    */
+    private function processTurn(Game $game, $turn = null) {
+        $moves = $this->getTurnMoves($game, $turn);
 
         // Move the players
         foreach ($moves as $move) {
-            $x = $move->player->x;
-            $y = $move->player->y;
+            $player = $game->getPlayerById($move->player->getId());
+
+            $x = $player->x;
+            $y = $player->y;
             switch ($move->action) {
                 case Move::ACTION_LEFT:
                     $x--;
@@ -442,17 +537,10 @@ class GameService {
             // Check if the user can move into the tile
             $targetTile = $game->board->getTileAt($x, $y);
             if ($targetTile->type !== Tile::TYPE_WALL) {
-                $move->player->x = $x;
-                $move->player->y = $y;
-            }
-
-            if (!$this->savePlayer($move->player)) {
-                throw new \Exception('Error saving player');
+                $player->x = $x;
+                $player->y = $y;
             }
         }
-
-        // Get updated game state
-        $game = $this->getGame($game->getId());
 
         // Interact with tiles
         // TODO: Separate to per-level logic
@@ -462,7 +550,6 @@ class GameService {
 
                 if ($tile->type === Tile::TYPE_GOLD) {
                     $tile->player = $player;
-                    $this->saveTile($tile);
                     $player->points = 100;
                     $game->state = Game::STATE_DONE;
                 }
@@ -495,7 +582,6 @@ class GameService {
 
                     if ($player->health > 0) {
                         $tile->player = $player;
-                        $this->saveTile($tile);
                     }
                 }
                 // Heal on health tiles
@@ -514,7 +600,7 @@ class GameService {
             }
         }
 
-        // Save the players
+        // Check for dead players
         foreach ($game->players as $player) {
             // Check if the player died
             if ($player->health <= 0) {
@@ -522,19 +608,19 @@ class GameService {
                 foreach ($game->board->goldTiles as $goldTile) {
                     if ($goldTile->player !== null && $goldTile->player->getId() === $player->getId()) {
                         $goldTile->player = null;
-                        $this->saveTile($goldTile);
                     }
                 }
 
-                // Respawn at health tile
-                $healthTile = $game->board->healTiles[array_rand($game->board->healTiles)];
+                // Respawn at closest health tile
+                $closest = null;
+                foreach($game->board->healTiles as $healTile) {
+                    if ($closest == null || (floor($closest->x - $player->x) + floor($closest->y - $player->y)) > (floor($healTile->x - $player->x) + floor($healTile->y - $player->y))) {
+                        $closest = $healTile;
+                    }
+                }
                 $player->health = 100;
-                $player->x = $healthTile->x;
-                $player->y = $healthTile->y;
-            }
-
-            if (!$this->savePlayer($player)) {
-                throw new \Exception('Error saving player');
+                $player->x = $closest->x;
+                $player->y = $closest->y;
             }
         }
 
@@ -543,8 +629,6 @@ class GameService {
         if ($game->turn === $game->length) {
             $game->state = Game::STATE_DONE;
         }
-
-        $this->saveGame($game);
     }
 
     /**

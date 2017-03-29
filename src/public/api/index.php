@@ -102,6 +102,8 @@ $app->group("/games", function () use ($botBattle) {
     */
     $this->get('/{id}', function (Request $request, Response $response) use ($botBattle) {
         $id = $request->getAttribute('id');
+        $turn = $request->getQueryParam('turn');
+
         $game = $botBattle->gameService->getGame($id);
 
         // Game not found
@@ -109,7 +111,29 @@ $app->group("/games", function () use ($botBattle) {
             return $response->withJson(new Error('Game not found'), 404);
         }
 
+        if ($turn !== null && $turn < $game->turn) {
+            $game = $botBattle->gameService->getTurnState($game, $turn);
+        }
+
         return $response->withJson($game);
+    });
+
+
+    /**
+    * Get a game by ID
+    */
+    $this->get('/{id}/states', function (Request $request, Response $response) use ($botBattle) {
+        $id = $request->getAttribute('id');
+
+        $game = $botBattle->gameService->getGame($id);
+        // Game not found
+        if ($game === null) {
+            return $response->withJson(new Error('Game not found'), 404);
+        }
+
+        $states = $botBattle->gameService->getGameStates($game);
+
+        return $response->withJson($states);
     });
 
     /**
