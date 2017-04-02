@@ -6,6 +6,7 @@ use BotBattle\Models\Generic\Model;
 * A player within a game - a user can be a player in multiple games
 */
 class Player extends Model implements \JsonSerializable{
+    public $gameId;
     public $user;
     public $x;
     public $y;
@@ -15,15 +16,17 @@ class Player extends Model implements \JsonSerializable{
     /**
     * Constructor
     * @param int $id The ID of the player
+    * @param int $gameId The ID of the game the player is part of
     * @param User $user The user the player is for
     * @param int $x The x coordinate of the player
     * @param int $y The y coordinate of the player
     * @param int $health The health of the player
     * @param int $points The number of points the player has
     */
-    public function __construct(int $id, User $user, int $x, int $y, int $health = 100, int $points = 0) {
+    public function __construct(int $id, int $gameId, User $user, int $x, int $y, int $health = 100, int $points = 0) {
         parent::__construct($id);
 
+        $this->gameId = $gameId;
         $this->user = $user;
         $this->x = $x;
         $this->y = $y;

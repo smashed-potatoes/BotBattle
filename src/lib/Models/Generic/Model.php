@@ -4,7 +4,7 @@
 * Base model
 */
 abstract class Model {
-    protected $id;
+    public $id;
 
     /**
     * Constructor
@@ -12,13 +12,5 @@ abstract class Model {
     */
     function __construct(int $id){
         $this->id = $id;
-    }
-
-    /**
-    * Get the ID of the model
-    * @return int The ID of the model
-    */
-    public function getId() {
-        return $this->id;
     }
 }

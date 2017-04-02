@@ -11,6 +11,7 @@ class Tile extends Model implements \JsonSerializable {
     const TYPE_GOLD = 2;
     const TYPE_HEAL = 3;
 
+    public $boardId;
     public $x;
     public $y;
     public $player;
@@ -19,14 +20,16 @@ class Tile extends Model implements \JsonSerializable {
     /**
     * Constructor
     * @param int $id The ID of the tile
+    * @param int $boardId The ID of the board that the tile belongs to
     * @param int $x The x coordinate of the tile
     * @param int $y The y coordinate of the tile
     * @param Player $player The player that owns the tile if there is one
     * @param int $type The type of tile, must be one of Tile::TYPE_GROUND, Tile::TYPE_WALL
     */
-    public function __construct(int $id, int $x, int $y, Player $player = null, int $type = Tile::TYPE_GROUND){
+    public function __construct(int $id, int $boardId, int $x, int $y, Player $player = null, int $type = Tile::TYPE_GROUND){
         parent::__construct($id);
 
+        $this->boardId = $boardId;
         $this->x = $x;
         $this->y = $y;
         $this->player = $player;

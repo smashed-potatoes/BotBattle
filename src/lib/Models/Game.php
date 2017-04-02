@@ -56,7 +56,7 @@ class Game extends Model implements \JsonSerializable {
     */
     public function getUserPlayer(User $user) { // : ?Player {
         foreach ($this->players as $player) {
-            if ($player->user->getId() == $user->getId()) {
+            if ($player->user->id == $user->id) {
                 return $player;
             }
         }
@@ -72,7 +72,7 @@ class Game extends Model implements \JsonSerializable {
     */
     public function getPlayerById(int $id) { // : ?Player {
         foreach ($this->players as $player) {
-            if ($player->getId() == $id) {
+            if ($player->id == $id) {
                 return $player;
             }
         }

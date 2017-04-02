@@ -40,20 +40,20 @@ $app->group("/users", function () use ($botBattle) {
             return $response->withJson(new Error('No user data sent'), 400);
         }
 
-        $user = $botBattle->userService->login($data['username']);
+        $user = $botBattle->login($data['username']);
 
         return $response->withJson($user);
     });
 
     $this->get('[/]', function (Request $request, Response $response) use ($botBattle) {
-        $user = $botBattle->userService->getCurrentUser();
+        $user = $botBattle->getCurrentUser();
 
         return $response->withJson($user);
     });
 
     $this->get('/{id}', function (Request $request, Response $response) use ($botBattle) {
         $id = $request->getAttribute('id');
-        $user = $botBattle->userService->getUser($id);
+        $user = $botBattle->getUser($id);
 
         // User not found
         if ($user === null) {
@@ -83,7 +83,7 @@ $app->group("/games", function () use ($botBattle) {
         }
 
         // Create the game
-        $game = $botBattle->gameService->createGame($data['difficulty']);
+        $game = $botBattle->createGame($data['difficulty']);
 
         return $response->withJson($game);
     });
@@ -104,7 +104,7 @@ $app->group("/games", function () use ($botBattle) {
         $id = $request->getAttribute('id');
         $turn = $request->getQueryParam('turn');
 
-        $game = $botBattle->gameService->getGame($id);
+        $game = $botBattle->getGame($id);
 
         // Game not found
         if ($game === null) {
@@ -112,7 +112,7 @@ $app->group("/games", function () use ($botBattle) {
         }
 
         if ($turn !== null && $turn < $game->turn) {
-            $game = $botBattle->gameService->getTurnState($game, $turn);
+            $game = $botBattle->getTurnState($game, $turn);
         }
 
         return $response->withJson($game);
@@ -125,13 +125,13 @@ $app->group("/games", function () use ($botBattle) {
     $this->get('/{id}/states', function (Request $request, Response $response) use ($botBattle) {
         $id = $request->getAttribute('id');
 
-        $game = $botBattle->gameService->getGame($id);
+        $game = $botBattle->getGame($id);
         // Game not found
         if ($game === null) {
             return $response->withJson(new Error('Game not found'), 404);
         }
 
-        $states = $botBattle->gameService->getGameStates($game);
+        $states = $botBattle->getGameStates($game);
 
         return $response->withJson($states);
     });
@@ -140,13 +140,13 @@ $app->group("/games", function () use ($botBattle) {
     * Join a game
     */
     $this->post('/{id}/players', function (Request $request, Response $response) use ($botBattle) {
-        $user = $botBattle->userService->getCurrentUser();
+        $user = $botBattle->getCurrentUser();
         if ($user == null) {
             return $response->withJson(new Error('Not logged in'), 401);
         }
 
         $id = $request->getAttribute('id');
-        $game = $botBattle->gameService->getGame($id);
+        $game = $botBattle->getGame($id);
 
         // Game not found
         if ($game === null) {
@@ -160,7 +160,7 @@ $app->group("/games", function () use ($botBattle) {
                 return $response->withJson(new Error('Game has already started'), 400);
             }
             
-            $player = $botBattle->gameService->joinGame($game, $user);
+            $player = $botBattle->joinGame($game, $user);
         }
 
         return $response->withJson($player);
@@ -170,13 +170,13 @@ $app->group("/games", function () use ($botBattle) {
     * Make a move in a game
     */
     $this->post('/{id}/moves', function (Request $request, Response $response) use ($botBattle) {
-        $user = $botBattle->userService->getCurrentUser();
+        $user = $botBattle->getCurrentUser();
         if ($user == null) {
             return $response->withJson(new Error('Not logged in'), 401);
         }
 
         $id = $request->getAttribute('id');
-        $game = $botBattle->gameService->getGame($id);
+        $game = $botBattle->getGame($id);
 
         // Game not found
         if ($game === null) {
@@ -201,7 +201,7 @@ $app->group("/games", function () use ($botBattle) {
         }
 
         // Get the user's player
-        $user = $botBattle->userService->getCurrentUser();
+        $user = $botBattle->getCurrentUser();
         $player = $game->getUserPlayer($user);
 
         if ($player === null) {
@@ -209,7 +209,7 @@ $app->group("/games", function () use ($botBattle) {
         }
 
         $action = intval($data['action']);
-        $move = $botBattle->gameService->makeMove($game, $player, $action);
+        $move = $botBattle->makeMove($game, $player, $action);
 
         // Move failed
         if ($move === null) {

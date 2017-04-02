@@ -13,6 +13,7 @@ class Move extends Model implements \JsonSerializable{
     const ACTION_UP = 3;
     const ACTION_DOWN = 4;
 
+    public $gameId;
     public $player;
     public $action;
     public $turn;
@@ -20,13 +21,15 @@ class Move extends Model implements \JsonSerializable{
     /**
     * Constructor
     * @param int $id The ID of the move
+    * @param int $gameId The ID of the game the move was made in
     * @param Player $player The player that made the move
     * @param int $turn The turn within the game that the move was made
     * @param int $action The action that was performed - should be one of MOVE::ACTION_NONE, MOVE::ACTION_LEFT, MOVE::ACTION_RIGHT, MOVE::ACTION_UP, MOVE::ACTION_DOWN
     */
-    public function __construct(int $id, Player $player, int $turn, int $action){
+    public function __construct(int $id, int $gameId, Player $player, int $turn, int $action){
         parent::__construct($id);
 
+        $this->gameId = $gameId;
         $this->player = $player;
         $this->action = $action;
         $this->turn = $turn;
